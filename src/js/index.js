@@ -8,3 +8,6 @@ const UI = require('./ui');
 
 // Import Editor module
 const Editor = require('./editor');
+
+// Import Console module
+const Console = require('./console');
