@@ -3,6 +3,9 @@
  * @description This is the main entry point for the JavaScript.
  */
 
+// Import FileSystem module
+const FileSystem = require('./fs');
+
 // Import UI module
 const UI = require('./ui');
 
