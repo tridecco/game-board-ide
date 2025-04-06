@@ -5,3 +5,6 @@
 
 // Import UI module
 const UI = require('./ui');
+
+// Import Editor module
+const Editor = require('./editor');
