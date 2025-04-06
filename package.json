@@ -1,4 +1,9 @@
 {
+  "scripts": {
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "format": "prettier --write ."
+  },
   "devDependencies": {
     "autoprefixer": "^10.4.21",
     "cssnano": "^7.0.6",
