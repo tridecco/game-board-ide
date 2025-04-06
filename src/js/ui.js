@@ -11,11 +11,8 @@ const DEFAULT_ALERT_DURATION = 3000;
 class UI {
   /**
    * @constructor
-   * @param {Object} app - The App class instance.
    */
-  constructor(app) {
-    this.app = app;
-
+  constructor() {
     this.notifications = new Map();
   }
 

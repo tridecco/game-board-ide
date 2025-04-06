@@ -9,11 +9,8 @@
 class Console {
   /**
    * @constructor
-   * @param {Object} app - The App class instance.
    */
-  constructor(app) {
-    this.app = app;
-  }
+  constructor() {}
 }
 
 module.exports = Console;

@@ -9,12 +9,10 @@
 class Editor {
   /**
    * @constructor
-   * @param {Object} app - The App class instance.
    * @param {HTMLElement} editorElement - The HTML element for the editor.
    * @param {Object} [options] - Optional parameters for the editor.
    */
-  constructor(app, editorElement, options = {}) {
-    this.app = app;
+  constructor(editorElement, options = {}) {
     this.editorElement = editorElement;
   }
 }
