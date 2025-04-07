@@ -12,7 +12,4 @@ module.exports = {
     minimize: true,
     minimizer: [new TerserPlugin()],
   },
-  externals: {
-    'vs/editor/editor.main': 'monaco',
-  },
 };
