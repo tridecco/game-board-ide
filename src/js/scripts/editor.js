@@ -1,12 +1,17 @@
 /**
  * @fileoverview Editor Functionality
- * @description This script handles the editor's UI interactions, including resizing panels and toolbar functionality.
+ * @description This script handles the editor's UI interactions, file operations, and autosave.
  */
 
-module.exports = function script() {
-  const MIN_PANEL_WIDTH = 100; // Minimum width for the left panel
-  const MIN_PANEL_HEIGHT = 50; // Minimum height for the top section
+const FileSystem = require('../fs');
+const Editor = require('../editor');
+const UI = require('../ui');
 
+const MIN_PANEL_WIDTH = 100;
+const MIN_PANEL_HEIGHT = 50;
+const AUTOSAVE_DELAY = 2000;
+
+module.exports = function script() {
   const verticalResizer = document.getElementById('editor-vertical-resizer');
   const horizontalResizer = document.getElementById(
     'editor-horizontal-resizer',
@@ -14,8 +19,26 @@ module.exports = function script() {
   const leftPanel = document.getElementById('editor-left-panel');
   const topSection = document.getElementById('editor-top-section');
   const bottomSection = document.getElementById('editor-bottom-section');
+  const toolbar = document.getElementById('editor-toolbar');
+  const saveStatusText = document.getElementById('editor-save-status-text');
+  const fileInputComputer = document.getElementById('file-input-computer');
+  const ideFileModal = document.getElementById('ide-file-modal');
+  const ideFileList = document.getElementById('ide-file-list');
+  const ideFileModalCancel = document.getElementById('ide-file-modal-cancel');
+  const ideFileModalTitle = document.getElementById('ide-file-modal-title');
 
-  // Vertical Resizer (Left/Right)
+  let currentFileId = null;
+  let currentFileName = 'Untitled';
+  let isDirty = false;
+  let autosaveTimeoutId = null;
+
+  // Initialize UI, FileSystem, and Editor instances
+  const ui = new UI();
+  const fs = new FileSystem('EditorStorage');
+  const editor = new Editor(document.getElementById('editor-editor'));
+
+  // UI Resizing Handlers
+
   verticalResizer.addEventListener('mousedown', (e) => {
     e.preventDefault();
     document.addEventListener('mousemove', resizeVertical);
@@ -23,7 +46,11 @@ module.exports = function script() {
   });
 
   function resizeVertical(e) {
-    const newWidth = Math.max(MIN_PANEL_WIDTH, e.clientX);
+    const containerWidth = document.body.clientWidth;
+    const newWidth = Math.min(
+      containerWidth - MIN_PANEL_WIDTH - verticalResizer.offsetWidth,
+      Math.max(MIN_PANEL_WIDTH, e.clientX),
+    );
     leftPanel.style.width = `${newWidth}px`;
   }
 
@@ -32,7 +59,6 @@ module.exports = function script() {
     document.removeEventListener('mouseup', stopResizeVertical);
   }
 
-  // Horizontal Resizer (Top/Bottom)
   horizontalResizer.addEventListener('mousedown', (e) => {
     e.preventDefault();
     document.addEventListener('mousemove', resizeHorizontal);
@@ -40,15 +66,26 @@ module.exports = function script() {
   });
 
   function resizeHorizontal(e) {
-    const containerHeight = document.body.clientHeight;
-    const offsetTop = topSection.parentElement.offsetTop;
-    const newHeight = e.clientY - offsetTop;
+    const rightPanel = horizontalResizer.parentElement; // The right panel container
+    if (!rightPanel) return;
 
+    const containerRect = rightPanel.getBoundingClientRect();
+    const resizerHeight = horizontalResizer.offsetHeight;
+    let newHeight = e.clientY - containerRect.top; // Relative to the right panel top
+
+    // Calculate available height within the right panel
+    const totalHeight = rightPanel.clientHeight;
+
+    // Apply constraints relative to the right panel's height
     const minHeight = MIN_PANEL_HEIGHT;
-    const maxHeight = containerHeight - MIN_PANEL_HEIGHT;
+    // Ensure bottom section also has minimum height
+    const maxHeight = totalHeight - MIN_PANEL_HEIGHT - resizerHeight;
 
-    topSection.style.height = `${Math.min(Math.max(newHeight, minHeight), maxHeight)}px`;
-    bottomSection.style.height = `${containerHeight - topSection.offsetHeight - horizontalResizer.offsetHeight}px`;
+    newHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
+
+    topSection.style.height = `${newHeight}px`;
+    // Calculate bottom height dynamically to fill remaining space
+    bottomSection.style.height = `calc(100% - ${newHeight}px - ${resizerHeight}px)`;
   }
 
   function stopResizeHorizontal() {
@@ -56,60 +93,363 @@ module.exports = function script() {
     document.removeEventListener('mouseup', stopResizeHorizontal);
   }
 
-  // Toolbar functionality (placeholders)
-  document.querySelector('#editor-toolbar').addEventListener('click', (e) => {
-    const textContent = e.target.textContent.trim();
+  // State Management & Status Updates
 
-    switch (textContent) {
-      case 'Open File':
-        // Placeholder for open file functionality
-        console.log('Open File clicked');
+  function updateSaveStatus(status = null) {
+    clearTimeout(autosaveTimeoutId); // Clear pending autosave on status update
+    autosaveTimeoutId = null;
+
+    let text = `File: ${currentFileName}`;
+    if (status) {
+      text = status; // Use explicit status if provided (e.g., "Saving...", "Saved.")
+    } else if (currentFileId) {
+      text += isDirty ? ' (Unsaved)' : ' (Saved)';
+    } else {
+      text += ' (Not saved to IDE)';
+    }
+    saveStatusText.textContent = text;
+    saveStatusText.className = isDirty ? 'text-yellow-400' : 'text-green-400'; // Use Tailwind classes
+    if (!currentFileId && !isDirty) {
+      saveStatusText.className = 'text-gray-400'; // Default state
+    }
+    if (status && status.includes('Saving')) {
+      saveStatusText.className = 'text-blue-400';
+    }
+    if (status && status.includes('failed')) {
+      saveStatusText.className = 'text-red-400';
+    }
+  }
+
+  function resetEditorState(fileName = 'Untitled', content = '') {
+    editor.setContent(content);
+    currentFileId = null;
+    currentFileName = fileName;
+    isDirty = false;
+    updateSaveStatus();
+    // Reset file input value to allow selecting the same file again if needed
+    if (fileInputComputer) {
+      fileInputComputer.value = '';
+    }
+  }
+
+  // File Operations
+
+  function handleNewFile() {
+    if (isDirty) {
+      if (
+        !confirm(
+          'You have unsaved changes. Are you sure you want to create a new file?',
+        )
+      ) {
+        return;
+      }
+    }
+    resetEditorState();
+    ui.alert('New empty file created.', 'success');
+  }
+
+  function handleLoadFromComputer() {
+    if (isDirty) {
+      if (
+        !confirm(
+          'You have unsaved changes. Are you sure you want to load a different file?',
+        )
+      ) {
+        return;
+      }
+    }
+    fileInputComputer.click();
+  }
+
+  fileInputComputer.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target.result;
+      resetEditorState(file.name, content); // Reset state with new file info
+      ui.alert(`File "${file.name}" loaded from computer.`, 'success');
+    };
+    reader.onerror = (e) => {
+      console.error('File reading error:', e);
+      ui.alert('Error reading file from computer.', 'error');
+      resetEditorState(); // Reset to clean state on error
+    };
+    reader.readAsText(file);
+  });
+
+  function showIdeFileModal() {
+    ideFileList.innerHTML = ''; // Clear previous list
+    ideFileModalTitle.textContent = 'Select File from IDE';
+
+    try {
+      const files = fs.listFiles();
+      if (files.length === 0) {
+        const noFilesMsg = document.createElement('p');
+        noFilesMsg.textContent = 'No files saved in the IDE yet.';
+        noFilesMsg.className = 'text-gray-500 text-center p-4';
+        ideFileList.appendChild(noFilesMsg);
+      } else {
+        files.forEach((file) => {
+          const button = document.createElement('button');
+          button.className =
+            'block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded';
+          button.textContent = `${file.name} (Saved: ${new Date(file.metadata.updatedAt).toLocaleString()})`;
+          button.dataset.fileId = file.id;
+          button.addEventListener('click', () => loadSelectedIdeFile(file.id));
+          ideFileList.appendChild(button);
+        });
+      }
+    } catch (error) {
+      console.error('Error listing IDE files:', error);
+      ui.alert('Could not list files from IDE.', 'error');
+      const errorMsg = document.createElement('p');
+      errorMsg.textContent = 'Error loading file list.';
+      errorMsg.className = 'text-red-500 text-center p-4';
+      ideFileList.appendChild(errorMsg);
+    }
+
+    ideFileModal.classList.remove('hidden');
+  }
+
+  function hideIdeFileModal() {
+    ideFileModal.classList.add('hidden');
+  }
+
+  function loadSelectedIdeFile(fileId) {
+    hideIdeFileModal();
+    try {
+      const fileData = fs.loadFile(fileId);
+      if (!fileData) {
+        throw new Error(`File with ID ${fileId} not found.`);
+      }
+      editor.setContent(fileData.content);
+      currentFileId = fileData.id;
+      currentFileName = fileData.name;
+      isDirty = false;
+      updateSaveStatus();
+      ui.alert(`File "${fileData.name}" loaded from IDE.`, 'success');
+    } catch (error) {
+      console.error('Error loading file from IDE:', error);
+      ui.alert(`Failed to load file: ${error.message}`, 'error');
+      resetEditorState(); // Reset on failure
+    }
+  }
+
+  ideFileModalCancel.addEventListener('click', hideIdeFileModal);
+
+  function handleSaveToComputer() {
+    const content = editor.getContent();
+    let suggestedName =
+      currentFileName && currentFileName !== 'Untitled'
+        ? currentFileName
+        : 'untitled.js';
+    // Ensure .js extension
+    if (!suggestedName.toLowerCase().endsWith('.js')) {
+      suggestedName += '.js';
+    }
+
+    const fileName = prompt('Enter filename to save (.js):', suggestedName);
+
+    if (!fileName) {
+      return; // User cancelled
+    }
+
+    // Basic validation and ensure .js extension
+    const finalFileName = fileName.toLowerCase().endsWith('.js')
+      ? fileName
+      : fileName + '.js';
+
+    const blob = new Blob([content], {
+      type: 'application/javascript;charset=utf-8',
+    });
+
+    try {
+      // Use the download link method (similar to fs.exportFile but with current content)
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = finalFileName;
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        ui.alert(`File "${finalFileName}" saved to computer.`, 'success');
+      }, 0);
+    } catch (error) {
+      console.error('Error saving file to computer:', error);
+      ui.alert('Failed to save file to computer.', 'error');
+    }
+  }
+
+  function handleSaveToIDE() {
+    const content = editor.getContent();
+    const suggestedName =
+      currentFileName && currentFileName !== 'Untitled'
+        ? currentFileName
+        : 'new_script.js'; // Suggest a default for new saves
+
+    const fileName = prompt('Enter filename to save in IDE:', suggestedName);
+
+    if (!fileName) {
+      return; // User cancelled
+    }
+
+    if (!fileName.trim()) {
+      ui.alert('Filename cannot be empty.', 'warning');
+      return;
+    }
+
+    try {
+      updateSaveStatus(`Saving "${fileName}" to IDE...`);
+      // Always create a new file on "Save As", get new ID
+      const newFileId = fs.createFile(
+        fileName,
+        content,
+        null /* boardVersion TBD */,
+      );
+      currentFileId = newFileId; // Update state to the newly saved file
+      currentFileName = fileName;
+      isDirty = false; // Now it's saved
+      updateSaveStatus(); // Update to "Saved" status
+      ui.alert(`File "${fileName}" saved to IDE.`, 'success');
+    } catch (error) {
+      console.error('Error saving file to IDE:', error);
+      ui.alert(`Failed to save to IDE: ${error.message}`, 'error');
+      updateSaveStatus('Save failed!'); // Show failure status
+    }
+  }
+
+  // Autosave functionality
+
+  function triggerAutosave() {
+    if (!currentFileId || !isDirty) {
+      return; // Only autosave if loaded from IDE and dirty
+    }
+
+    clearTimeout(autosaveTimeoutId);
+    updateSaveStatus(`File: ${currentFileName} (Saving...)`); // Indicate pending save
+
+    autosaveTimeoutId = setTimeout(() => {
+      performAutosave();
+    }, AUTOSAVE_DELAY);
+  }
+
+  function performAutosave() {
+    if (!currentFileId || !isDirty) {
+      updateSaveStatus(); // Update status if state changed before save happened
+      return;
+    }
+
+    const contentToSave = editor.getContent();
+    console.log(`Autosaving file: ${currentFileName} (ID: ${currentFileId})`);
+    try {
+      fs.updateFile(currentFileId, { content: contentToSave });
+      isDirty = false;
+      const time = new Date().toLocaleTimeString();
+      updateSaveStatus(`File: ${currentFileName} (Autosaved at ${time})`);
+    } catch (error) {
+      console.error('Autosave failed:', error);
+      updateSaveStatus('Autosave failed!');
+      ui.alert(`Autosave failed: ${error.message}`, 'error');
+    }
+    autosaveTimeoutId = null;
+  }
+
+  // Event Listeners
+
+  editor.onContentChange(() => {
+    if (!isDirty) {
+      isDirty = true;
+      updateSaveStatus(); // Update status immediately to "Unsaved"
+    }
+    if (currentFileId) {
+      // Only schedule autosave if file is from IDE
+      triggerAutosave();
+    }
+  });
+
+  toolbar.addEventListener('click', (e) => {
+    let target = e.target;
+    // Handle clicks inside buttons (like icons or text nodes)
+    if (!target.dataset.action && target.parentElement.tagName === 'BUTTON') {
+      target = target.parentElement;
+    }
+
+    const action = target.dataset.action;
+
+    if (!action) {
+      // Might be a click on the dropdown arrow or container, ignore
+      return;
+    }
+
+    // Hide dropdowns after clicking an action item (simple approach)
+    document.querySelectorAll('#editor-toolbar .group').forEach((group) => {
+      const dropdown = group.querySelector('.absolute');
+      if (dropdown) dropdown.classList.add('hidden'); // Force hide, hover will show again
+    });
+
+    switch (action) {
+      case 'load-ide':
+        if (isDirty) {
+          if (
+            !confirm(
+              'You have unsaved changes. Are you sure you want to load from IDE?',
+            )
+          ) {
+            return;
+          }
+        }
+        showIdeFileModal();
         break;
-      case 'From IDE':
-        // Placeholder for open file from IDE functionality
-        console.log('Open File from IDE clicked');
+      case 'load-computer':
+        handleLoadFromComputer();
         break;
-      case 'From Computer':
-        // Placeholder for open file from computer functionality
-        console.log('Open File from Computer clicked');
+      case 'new-empty':
+        handleNewFile();
         break;
-      case 'New File':
-        // Placeholder for new file functionality
-        console.log('New File clicked');
+      case 'new-template':
+        // Placeholder for template functionality
+        ui.alert('Template functionality not yet implemented.', 'info');
+        console.log('New File from Template clicked');
         break;
-      case 'Empty':
-        // Placeholder for creating an empty new file
-        console.log('New Empty File created');
+      case 'save-ide':
+        handleSaveToIDE();
         break;
-      case 'From Template':
-        // Placeholder for creating a new file from a template
-        console.log('New File from Template created');
+      case 'save-computer':
+        handleSaveToComputer();
         break;
-      case 'Save File':
-        // Placeholder for save file functionality
-        console.log('Save File clicked');
-        break;
-      case 'To IDE':
-        // Placeholder for saving file to IDE functionality
-        console.log('Save File to IDE clicked');
-        break;
-      case 'To Computer':
-        // Placeholder for saving file to computer functionality
-        console.log('Save File to Computer clicked');
-        break;
-      case 'Share':
+      case 'share':
         // Placeholder for share functionality
+        ui.alert('Share functionality not yet implemented.', 'info');
         console.log('Share clicked');
         break;
-      case 'Exit':
+      case 'exit':
         // Placeholder for exit functionality
+        if (isDirty) {
+          if (
+            !confirm(
+              'You have unsaved changes that might not be autosaved. Are you sure you want to exit?',
+            )
+          ) {
+            return;
+          }
+        }
         console.log('Exit clicked');
-        // Optionally, you might want to close the editor or redirect to another page
-        window.close(); // This will attempt to close the current window
+        // Optionally, try to close or navigate away
+        window.location.href = '/'; // Or a specific exit page
+        // window.close(); // Often blocked by browsers
         break;
       default:
-        console.log('Unknown action clicked:', textContent);
+        console.log('Unknown action clicked:', action);
         break;
     }
   });
+
+  // Initial setup
+  resetEditorState(); // Set initial state
 };
