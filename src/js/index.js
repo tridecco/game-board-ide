@@ -10,6 +10,9 @@ const Editor = require('./editor');
 const Console = require('./console');
 const Pages = require('./pages');
 
+// Import utilities
+const isMobileDevice = require('./utils/isMobileDevice');
+
 // Import page scripts
 const pageScripts = require('./scripts');
 
@@ -20,7 +23,14 @@ const pages = new Pages([
   'files-container',
   'not-supported-container',
 ]);
-pages.switchTo('home-container'); // Default to home page
+
+// Initialize the pages
+if (!isMobileDevice()) {
+  pages.switchTo('home-container');
+} else {
+  // If it's a mobile device, show the not-supported page
+  pages.switchTo('not-supported-container');
+}
 
 // Run the scripts
 pageScripts();
