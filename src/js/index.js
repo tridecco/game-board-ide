@@ -3,14 +3,14 @@
  * @description This is the main entry point for the JavaScript.
  */
 
-// Import FileSystem module
+// Import modules
 const FileSystem = require('./fs');
-
-// Import UI module
 const UI = require('./ui');
-
-// Import Editor module
 const Editor = require('./editor');
-
-// Import Console module
 const Console = require('./console');
+
+// Import page scripts
+const pageScripts = require('./scripts');
+
+// Run the scripts
+pageScripts();
