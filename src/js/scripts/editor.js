@@ -3,16 +3,15 @@
  * @description This script handles the editor's UI interactions, file operations, and autosave.
  */
 
-const FileSystem = require('../fs');
 const Editor = require('../editor');
-const UI = require('../ui');
 
 const MIN_PANEL_WIDTH = 100;
 const MIN_PANEL_HEIGHT = 50;
 const AUTOSAVE_DELAY = 2000;
 const DROPDOWN_HIDE_DELAY = 300;
+const SELECTED_FILE_KEY = 'editorOpenFileId'; // Key for localStorage communication
 
-module.exports = function script() {
+module.exports = function script({ pages, ui, fs }) {
   const verticalResizer = document.getElementById('editor-vertical-resizer');
   const horizontalResizer = document.getElementById(
     'editor-horizontal-resizer',
@@ -33,9 +32,7 @@ module.exports = function script() {
   let isDirty = false;
   let autosaveTimeoutId = null;
 
-  // Initialize UI, FileSystem, and Editor instances
-  const ui = new UI();
-  const fs = new FileSystem('EditorStorage');
+  // Initialize the editor
   const editor = new Editor(document.getElementById('editor-editor'));
 
   function setupDropdowns() {
@@ -180,7 +177,49 @@ module.exports = function script() {
     }
   }
 
-  // File Operations
+  // File Loading and Saving
+
+  function loadSpecificIdeFile(fileId) {
+    console.log(`Attempting to load specified IDE file: ${fileId}`);
+    try {
+      const fileData = fs.loadFile(fileId);
+      if (!fileData) {
+        throw new Error(`File with ID ${fileId} not found in IDE storage.`);
+      }
+      editor.setContent(fileData.content);
+      currentFileId = fileData.id;
+      currentFileName = fileData.name;
+      isDirty = false; // Loaded fresh from storage
+      updateSaveStatus();
+      ui.alert(`Loaded file "${fileData.name}" from IDE.`, 'success');
+    } catch (error) {
+      console.error('Error loading specific file from IDE:', error);
+      ui.alert(`Failed to load requested file: ${error.message}`, 'error');
+      resetEditorState(); // Reset to empty state on failure
+    } finally {
+      // Always clear the key after attempting to load
+      try {
+        localStorage.removeItem(SELECTED_FILE_KEY);
+      } catch (e) {
+        console.warn('Could not remove item from localStorage:', e);
+      }
+    }
+  }
+
+  function loadSelectedIdeFile(fileId) {
+    hideIdeFileModal();
+    if (isDirty) {
+      if (
+        !confirm(
+          'You have unsaved changes. Are you sure you want to load this file?',
+        )
+      ) {
+        return;
+      }
+    }
+    // Call the dedicated function
+    loadSpecificIdeFile(fileId);
+  }
 
   function handleNewFile() {
     if (isDirty) {
@@ -522,7 +561,7 @@ module.exports = function script() {
         break;
       case 'exit':
         console.log('Exit clicked');
-        window.location.href = '/';
+        pages.switchTo('home-container'); // Switch to home page
         break;
       default:
         console.log('Unknown action clicked:', action);
@@ -531,6 +570,15 @@ module.exports = function script() {
   });
 
   // Initial setup
-  resetEditorState(); // Set initial state
-  setupDropdowns(); // Initialize dropdowns
+  setupDropdowns(); // Setup dropdown hover logic
+
+  // Check if we need to load a specific file (navigated from files page)
+  const fileIdToOpen = localStorage.getItem(SELECTED_FILE_KEY);
+  if (fileIdToOpen) {
+    // Attempt to load the file, and remove the key afterwards (done inside the function)
+    loadSpecificIdeFile(fileIdToOpen);
+  } else {
+    // Otherwise, start with a clean state
+    resetEditorState();
+  }
 };
