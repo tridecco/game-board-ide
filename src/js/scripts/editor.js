@@ -181,9 +181,12 @@ module.exports = function script() {
     reader.readAsText(file);
   });
 
-  function showIdeFileModal() {
+  function showIdeFileModal(mode = 'load') {
     ideFileList.innerHTML = ''; // Clear previous list
-    ideFileModalTitle.textContent = 'Select File from IDE';
+
+    // Set modal title based on mode
+    ideFileModalTitle.textContent =
+      mode === 'template' ? 'Select Template from IDE' : 'Select File from IDE';
 
     try {
       const files = fs.listFiles();
@@ -199,7 +202,18 @@ module.exports = function script() {
             'block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded';
           button.textContent = `${file.name} (Saved: ${new Date(file.metadata.updatedAt).toLocaleString()})`;
           button.dataset.fileId = file.id;
-          button.addEventListener('click', () => loadSelectedIdeFile(file.id));
+
+          // Attach different click handler based on mode
+          if (mode === 'template') {
+            button.addEventListener('click', () =>
+              loadSelectedFileAsTemplate(file.id),
+            );
+          } else {
+            // Default 'load' mode
+            button.addEventListener('click', () =>
+              loadSelectedIdeFile(file.id),
+            );
+          }
           ideFileList.appendChild(button);
         });
       }
@@ -221,6 +235,16 @@ module.exports = function script() {
 
   function loadSelectedIdeFile(fileId) {
     hideIdeFileModal();
+    if (isDirty) {
+      // Double check dirty state before loading
+      if (
+        !confirm(
+          'You have unsaved changes. Are you sure you want to load this file?',
+        )
+      ) {
+        return;
+      }
+    }
     try {
       const fileData = fs.loadFile(fileId);
       if (!fileData) {
@@ -235,7 +259,29 @@ module.exports = function script() {
     } catch (error) {
       console.error('Error loading file from IDE:', error);
       ui.alert(`Failed to load file: ${error.message}`, 'error');
-      resetEditorState(); // Reset on failure
+      resetEditorState();
+    }
+  }
+
+  function loadSelectedFileAsTemplate(templateFileId) {
+    hideIdeFileModal();
+    try {
+      const templateData = fs.loadFile(templateFileId);
+      if (!templateData) {
+        throw new Error(`Template file with ID ${templateFileId} not found.`);
+      }
+
+      // Reset the editor state using the template's content but as a new, unsaved file
+      const newFileName = `Untitled from ${templateData.name}`;
+      resetEditorState(newFileName, templateData.content);
+
+      ui.alert(
+        `Created new file based on template "${templateData.name}".`,
+        'success',
+      );
+    } catch (error) {
+      console.error('Error loading file as template:', error);
+      ui.alert(`Failed to use file as template: ${error.message}`, 'error');
     }
   }
 
@@ -244,7 +290,9 @@ module.exports = function script() {
   function handleSaveToComputer() {
     const content = editor.getContent();
     let suggestedName =
-      currentFileName && currentFileName !== 'Untitled'
+      currentFileName &&
+      currentFileName !== 'Untitled' &&
+      !currentFileName.startsWith('Untitled from')
         ? currentFileName
         : 'untitled.js';
     // Ensure .js extension
@@ -288,10 +336,13 @@ module.exports = function script() {
 
   function handleSaveToIDE() {
     const content = editor.getContent();
+    // Suggest a better name if it's based on a template or untitled
     const suggestedName =
-      currentFileName && currentFileName !== 'Untitled'
+      currentFileName &&
+      currentFileName !== 'Untitled' &&
+      !currentFileName.startsWith('Untitled from')
         ? currentFileName
-        : 'new_script.js'; // Suggest a default for new saves
+        : 'new_script.js';
 
     const fileName = prompt('Enter filename to save in IDE:', suggestedName);
 
@@ -375,12 +426,20 @@ module.exports = function script() {
 
   toolbar.addEventListener('click', (e) => {
     let target = e.target;
-    // Handle clicks inside buttons (like icons or text nodes)
-    if (!target.dataset.action && target.parentElement.tagName === 'BUTTON') {
+    if (
+      !target.dataset.action &&
+      target.parentElement.tagName === 'BUTTON' &&
+      target.parentElement.dataset.action
+    ) {
       target = target.parentElement;
+    } else if (
+      !target.dataset.action &&
+      target.closest('button[data-action]')
+    ) {
+      target = target.closest('button[data-action]'); // Handle clicks on icons/spans within button
     }
 
-    const action = target.dataset.action;
+    const action = target?.dataset.action;
 
     if (!action) {
       // Might be a click on the dropdown arrow or container, ignore
@@ -390,21 +449,42 @@ module.exports = function script() {
     // Hide dropdowns after clicking an action item (simple approach)
     document.querySelectorAll('#editor-toolbar .group').forEach((group) => {
       const dropdown = group.querySelector('.absolute');
-      if (dropdown) dropdown.classList.add('hidden'); // Force hide, hover will show again
+      if (dropdown) dropdown.classList.add('hidden');
     });
+
+    // Check dirty state centrally for actions that load/replace content
+    const isLoadAction = [
+      'load-ide',
+      'load-computer',
+      'new-empty',
+      'new-template',
+      'exit',
+    ];
+    if (isDirty && isLoadAction.includes(action)) {
+      let confirmationMessage =
+        'You have unsaved changes. Are you sure you want to continue?';
+      if (action === 'exit') {
+        confirmationMessage =
+          'You have unsaved changes that might not be autosaved. Are you sure you want to exit?';
+      } else if (action === 'new-template') {
+        confirmationMessage =
+          'You have unsaved changes. Are you sure you want to create a new file from a template?';
+      } else if (action === 'new-empty') {
+        confirmationMessage =
+          'You have unsaved changes. Are you sure you want to create a new empty file?';
+      } else if (action.startsWith('load-')) {
+        confirmationMessage =
+          'You have unsaved changes. Are you sure you want to load a different file?';
+      }
+
+      if (!confirm(confirmationMessage)) {
+        return; // Stop the action if user cancels
+      }
+    }
 
     switch (action) {
       case 'load-ide':
-        if (isDirty) {
-          if (
-            !confirm(
-              'You have unsaved changes. Are you sure you want to load from IDE?',
-            )
-          ) {
-            return;
-          }
-        }
-        showIdeFileModal();
+        showIdeFileModal('load');
         break;
       case 'load-computer':
         handleLoadFromComputer();
@@ -413,9 +493,7 @@ module.exports = function script() {
         handleNewFile();
         break;
       case 'new-template':
-        // Placeholder for template functionality
-        ui.alert('Template functionality not yet implemented.', 'info');
-        console.log('New File from Template clicked');
+        showIdeFileModal('template');
         break;
       case 'save-ide':
         handleSaveToIDE();
@@ -429,20 +507,8 @@ module.exports = function script() {
         console.log('Share clicked');
         break;
       case 'exit':
-        // Placeholder for exit functionality
-        if (isDirty) {
-          if (
-            !confirm(
-              'You have unsaved changes that might not be autosaved. Are you sure you want to exit?',
-            )
-          ) {
-            return;
-          }
-        }
         console.log('Exit clicked');
-        // Optionally, try to close or navigate away
-        window.location.href = '/'; // Or a specific exit page
-        // window.close(); // Often blocked by browsers
+        window.location.href = '/';
         break;
       default:
         console.log('Unknown action clicked:', action);
