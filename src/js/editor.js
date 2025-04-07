@@ -3,7 +3,6 @@
  * @description This module handles the editor functionalities for the application.
  */
 
-const MONACO_EDITOR_VERSION = '0.52.2';
 const DEFAULT_EDITOR_OPTIONS = {
   language: 'javascript',
   theme: 'vs-dark',
@@ -26,7 +25,7 @@ class Editor {
     this.editorElement = editorElement;
     this.options = { ...DEFAULT_EDITOR_OPTIONS, ...options };
     this.editorInstance = null;
-
+    this.contentChangeCallbacks = [];
     this._initMonaco();
   }
 
@@ -34,25 +33,30 @@ class Editor {
    * @method _initMonaco - Initializes the Monaco Editor.
    */
   _initMonaco() {
-    require.config({
-      paths: {
-        vs: `https://cdn.jsdelivr.net/npm/monaco-editor@${MONACO_EDITOR_VERSION}/min/vs`,
-      },
-    });
+    if (window.__monaco_ready__) {
+      this._createEditor();
+    } else {
+      window.addEventListener('monaco-ready', () => this._createEditor(), {
+        once: true,
+      });
+    }
+  }
 
-    require(['vs/editor/editor.main'], () => {
-      this.editorInstance = monaco.editor.create(
-        this.editorElement,
-        this.options,
-      );
+  /**
+   * @method _createEditor - Creates the Monaco Editor instance.
+   */
+  _createEditor() {
+    this.editorInstance = monaco.editor.create(
+      this.editorElement,
+      this.options,
+    );
 
-      this.editorInstance.onDidChangeModelContent((event) => {
-        const currentContent = this.getContent();
-        this.contentChangeCallbacks.forEach((cb) => {
-          if (typeof cb === 'function') {
-            cb(currentContent, event);
-          }
-        });
+    this.editorInstance.onDidChangeModelContent((event) => {
+      const currentContent = this.getContent();
+      this.contentChangeCallbacks.forEach((cb) => {
+        if (typeof cb === 'function') {
+          cb(currentContent, event);
+        }
       });
     });
   }
