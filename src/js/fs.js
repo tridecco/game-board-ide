@@ -149,7 +149,10 @@ class FileSystem {
       fileData.boardVersion = updates.boardVersion;
       updated = true;
     }
-    if (updates.hasOwnProperty('name') && updates.name) {
+    if (updates.hasOwnProperty('name')) {
+      if (!updates.name) {
+        throw new Error('File name cannot be empty.');
+      }
       fileData.name = updates.name;
       updated = true;
     }
