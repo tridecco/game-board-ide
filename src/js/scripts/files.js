@@ -22,7 +22,6 @@ module.exports = function filesScript({ pages, ui, fs }) {
   let allFilesCache = []; // Cache the full list for searching
 
   function formatTimestamp(timestamp) {
-    // ... (keep existing formatTimestamp function) ...
     if (!timestamp) return 'N/A';
     try {
       return new Date(timestamp).toLocaleString();
@@ -167,7 +166,6 @@ module.exports = function filesScript({ pages, ui, fs }) {
   }
 
   function handleDeleteFile(fileId) {
-    // ... (keep existing handleDeleteFile function, but refresh correctly) ...
     if (!fileId) return;
 
     if (confirm('Are you sure you want to permanently delete this file?')) {
@@ -353,4 +351,7 @@ module.exports = function filesScript({ pages, ui, fs }) {
   // Attach event listeners
   container.addEventListener('click', handleContainerClick);
   searchInput.addEventListener('input', filterAndRenderFiles); // Add listener for search
+
+  // Refresh file list when the page is shown
+  pages.onShow('files-container', loadAndDisplayFiles);
 };
