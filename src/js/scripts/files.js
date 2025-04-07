@@ -143,7 +143,7 @@ module.exports = function filesScript({ pages, ui, fs }) {
   function handleRenameFile(fileId, currentName) {
     if (!fileId) return;
 
-    const newName = prompt('Enter new file name:', currentName);
+    let newName = prompt('Enter new file name:', currentName);
 
     if (newName === null || newName.trim() === '') {
       if (newName !== null) ui.alert('File name cannot be empty.', 'warning');
@@ -151,6 +151,10 @@ module.exports = function filesScript({ pages, ui, fs }) {
     }
 
     if (newName === currentName) return;
+
+    if (!newName.endsWith('.js')) {
+      newName += '.js'; // Ensure it has a .js extension
+    }
 
     try {
       fs.updateFile(fileId, { name: newName.trim() });
