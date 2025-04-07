@@ -10,6 +10,7 @@ const UI = require('../ui');
 const MIN_PANEL_WIDTH = 100;
 const MIN_PANEL_HEIGHT = 50;
 const AUTOSAVE_DELAY = 2000;
+const DROPDOWN_HIDE_DELAY = 300;
 
 module.exports = function script() {
   const verticalResizer = document.getElementById('editor-vertical-resizer');
@@ -37,7 +38,55 @@ module.exports = function script() {
   const fs = new FileSystem('EditorStorage');
   const editor = new Editor(document.getElementById('editor-editor'));
 
-  // UI Resizing Handlers
+  function setupDropdowns() {
+    const dropdownGroups = toolbar.querySelectorAll('[data-dropdown-group]');
+
+    dropdownGroups.forEach((group) => {
+      const menu = group.querySelector('[data-dropdown-menu]');
+      let hideTimeoutId = null; // Use a specific timeout ID per group
+
+      if (!menu) return;
+
+      const showMenu = () => {
+        clearTimeout(hideTimeoutId); // Clear any pending hide
+        // Hide other menus first (optional, good practice)
+        dropdownGroups.forEach((otherGroup) => {
+          if (otherGroup !== group) {
+            otherGroup
+              .querySelector('[data-dropdown-menu]')
+              ?.classList.add('hidden');
+          }
+        });
+        menu.classList.remove('hidden');
+      };
+
+      const startHideTimer = () => {
+        clearTimeout(hideTimeoutId); // Clear previous timer if mouse moves quickly
+        hideTimeoutId = setTimeout(() => {
+          menu.classList.add('hidden');
+        }, DROPDOWN_HIDE_DELAY);
+      };
+
+      group.addEventListener('mouseenter', showMenu);
+      group.addEventListener('mouseleave', startHideTimer);
+
+      // Keep menu open when hovering over the menu itself
+      menu.addEventListener('mouseenter', () => clearTimeout(hideTimeoutId));
+      menu.addEventListener('mouseleave', startHideTimer); // Also start timer when leaving menu
+    });
+
+    // Close dropdown if clicking outside
+    document.addEventListener('click', (event) => {
+      const clickedInside = Array.from(dropdownGroups).some((group) =>
+        group.contains(event.target),
+      );
+      if (!clickedInside) {
+        dropdownGroups.forEach((group) => {
+          group.querySelector('[data-dropdown-menu]')?.classList.add('hidden');
+        });
+      }
+    });
+  }
 
   verticalResizer.addEventListener('mousedown', (e) => {
     e.preventDefault();
@@ -126,7 +175,6 @@ module.exports = function script() {
     currentFileName = fileName;
     isDirty = false;
     updateSaveStatus();
-    // Reset file input value to allow selecting the same file again if needed
     if (fileInputComputer) {
       fileInputComputer.value = '';
     }
@@ -149,15 +197,6 @@ module.exports = function script() {
   }
 
   function handleLoadFromComputer() {
-    if (isDirty) {
-      if (
-        !confirm(
-          'You have unsaved changes. Are you sure you want to load a different file?',
-        )
-      ) {
-        return;
-      }
-    }
     fileInputComputer.click();
   }
 
@@ -166,7 +205,6 @@ module.exports = function script() {
     if (!file) {
       return;
     }
-
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target.result;
@@ -235,16 +273,6 @@ module.exports = function script() {
 
   function loadSelectedIdeFile(fileId) {
     hideIdeFileModal();
-    if (isDirty) {
-      // Double check dirty state before loading
-      if (
-        !confirm(
-          'You have unsaved changes. Are you sure you want to load this file?',
-        )
-      ) {
-        return;
-      }
-    }
     try {
       const fileData = fs.loadFile(fileId);
       if (!fileData) {
@@ -425,32 +453,18 @@ module.exports = function script() {
   });
 
   toolbar.addEventListener('click', (e) => {
-    let target = e.target;
-    if (
-      !target.dataset.action &&
-      target.parentElement.tagName === 'BUTTON' &&
-      target.parentElement.dataset.action
-    ) {
-      target = target.parentElement;
-    } else if (
-      !target.dataset.action &&
-      target.closest('button[data-action]')
-    ) {
-      target = target.closest('button[data-action]'); // Handle clicks on icons/spans within button
-    }
+    const target = e.target;
+    const actionButton = target.closest('button[data-action]');
 
-    const action = target?.dataset.action;
-
-    if (!action) {
-      // Might be a click on the dropdown arrow or container, ignore
+    if (!actionButton) {
       return;
     }
 
-    // Hide dropdowns after clicking an action item (simple approach)
-    document.querySelectorAll('#editor-toolbar .group').forEach((group) => {
-      const dropdown = group.querySelector('.absolute');
-      if (dropdown) dropdown.classList.add('hidden');
-    });
+    const action = actionButton.dataset.action;
+
+    // Action clicks should immediately hide the dropdown they came from
+    const parentGroup = actionButton.closest('[data-dropdown-group]');
+    parentGroup?.querySelector('[data-dropdown-menu')?.classList.add('hidden');
 
     // Check dirty state centrally for actions that load/replace content
     const isLoadAction = [
@@ -518,4 +532,5 @@ module.exports = function script() {
 
   // Initial setup
   resetEditorState(); // Set initial state
+  setupDropdowns(); // Initialize dropdowns
 };
