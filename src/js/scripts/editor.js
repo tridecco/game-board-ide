@@ -363,7 +363,7 @@ module.exports = function script({ pages, ui, fs }) {
         ? currentFileName
         : 'untitled.js';
     // Ensure .js extension
-    if (!suggestedName.toLowerCase().endsWith('.js')) {
+    if (!suggestedName.endsWith('.js')) {
       suggestedName += '.js';
     }
 
@@ -374,7 +374,7 @@ module.exports = function script({ pages, ui, fs }) {
     }
 
     // Basic validation and ensure .js extension
-    const finalFileName = fileName.toLowerCase().endsWith('.js')
+    const finalFileName = fileName.endsWith('.js')
       ? fileName
       : fileName + '.js';
 
