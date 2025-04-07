@@ -351,4 +351,7 @@ module.exports = function filesScript({ pages, ui, fs }) {
   // Attach event listeners
   container.addEventListener('click', handleContainerClick);
   searchInput.addEventListener('input', filterAndRenderFiles); // Add listener for search
+
+  // Refresh file list when the page is shown
+  pages.onShow('files-container', loadAndDisplayFiles);
 };
