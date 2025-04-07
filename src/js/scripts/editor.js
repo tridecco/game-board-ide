@@ -577,12 +577,17 @@ module.exports = function script({ pages, ui, fs }) {
   setupDropdowns(); // Setup dropdown hover logic
 
   // Check if we need to load a specific file (navigated from files page)
-  const fileIdToOpen = localStorage.getItem(SELECTED_FILE_KEY);
-  if (fileIdToOpen) {
-    // Attempt to load the file, and remove the key afterwards (done inside the function)
-    loadSpecificIdeFile(fileIdToOpen);
-  } else {
-    // Otherwise, start with a clean state
-    resetEditorState();
+  function editorPageOnOpen() {
+    const fileIdToOpen = localStorage.getItem(SELECTED_FILE_KEY);
+    if (fileIdToOpen) {
+      // Attempt to load the file, and remove the key afterwards (done inside the function)
+      loadSpecificIdeFile(fileIdToOpen);
+    } else {
+      // Otherwise, start with a clean state
+      resetEditorState();
+    }
   }
+
+  // Register the page open handler
+  pages.onShow('editor-container', editorPageOnOpen);
 };
