@@ -1,0 +1,61 @@
+<div class="flex flex-col h-full w-full">
+  <!-- Toolbar -->
+  <div id="editor-toolbar" class="bg-gray-800 text-white flex items-center px-4 py-2">
+    <div class="relative group mr-4">
+      <button class="px-3 py-1 bg-blue-500 hover:bg-blue-600 rounded text-sm">Open File</button>
+      <div class="absolute hidden group-hover:block bg-white text-black shadow-lg rounded mt-1">
+        <button class="block px-4 py-2 text-sm hover:bg-gray-200 w-full text-left rounded">From IDE</button>
+        <button class="block px-4 py-2 text-sm hover:bg-gray-200 w-full text-left rounded">From Computer</button>
+      </div>
+    </div>
+    <div class="relative group mr-4">
+      <button class="px-3 py-1 bg-blue-500 hover:bg-blue-600 rounded text-sm">New File</button>
+      <div class="absolute hidden group-hover:block bg-white text-black shadow-lg rounded mt-1">
+        <button class="block px-4 py-2 text-sm hover:bg-gray-200 w-full text-left rounded">Empty</button>
+        <button class="block px-4 py-2 text-sm hover:bg-gray-200 w-full text-left rounded">From Template</button>
+      </div>
+    </div>
+    <div class="relative group mr-4">
+      <button class="px-3 py-1 bg-blue-500 hover:bg-blue-600 rounded text-sm">Save File</button>
+      <div class="absolute hidden group-hover:block bg-white text-black shadow-lg rounded mt-1">
+        <button class="block px-4 py-2 text-sm hover:bg-gray-200 w-full text-left rounded">To IDE</button>
+        <button class="block px-4 py-2 text-sm hover:bg-gray-200 w-full text-left rounded">To Computer</button>
+      </div>
+    </div>
+    <button class="px-3 py-1 bg-blue-500 hover:bg-blue-600 rounded text-sm">Share</button>
+    <button class="ml-auto px-3 py-1 bg-red-500 hover:bg-red-600 rounded text-sm">Exit</button>
+  </div>
+
+  <!-- Main Content -->
+  <div class="flex flex-1">
+    <!-- Left Panel -->
+    <div id="editor-left-panel" class="bg-gray-200 h-full" style="width: 50%;">
+      <div class="h-full overflow-hidden">
+        Left Panel
+      </div>
+    </div>
+
+    <!-- Vertical Resizer -->
+    <div id="editor-vertical-resizer" class="w-1 bg-gray-400 cursor-col-resize transition-colors duration-200 ease-in-out hover:bg-gray-600"></div>
+
+    <!-- Main Area -->
+    <div class="flex-1 flex flex-col">
+      <!-- Top Section -->
+      <div id="editor-top-section" class="bg-gray-300" style="height: 70%;">
+        <div class="h-full overflow-hidden">
+          Top Section
+        </div>
+      </div>
+
+      <!-- Horizontal Resizer -->
+      <div id="editor-horizontal-resizer" class="h-1 bg-gray-400 cursor-row-resize transition-colors duration-200 ease-in-out hover:bg-gray-600"></div>
+
+      <!-- Bottom Section -->
+      <div id="editor-bottom-section" class="bg-gray-400 flex-1">
+        <div class="h-full overflow-hidden">
+          Bottom Section
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

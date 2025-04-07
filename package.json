@@ -5,7 +5,7 @@
     "format": "prettier --write .",
     "build": "npm run build:clean && npm run build:static && npm run build:js && npm run build:css && npm run build:html",
     "build:clean": "rimraf dist",
-    "build:static": "cpy static/**/* dist",
+    "build:static": "cpy 'static/**/*.*' dist",
     "build:js": "webpack",
     "build:css": "postcss src/css/styles.css -o dist/css/styles.css",
     "build:html": "node scripts/build-html.js"
