@@ -4,11 +4,9 @@
  */
 
 // Import modules
-const FileSystem = require('./fs');
-const UI = require('./ui');
-const Editor = require('./editor');
-const Console = require('./console');
 const Pages = require('./pages');
+const UI = require('./ui');
+const FileSystem = require('./fs');
 
 // Import utilities
 const isMobileDevice = require('./utils/isMobileDevice');
@@ -24,6 +22,12 @@ const pages = new Pages([
   'not-supported-container',
 ]);
 
+// Initialize the UI
+const ui = new UI();
+
+// Initialize the FileSystem
+const fs = new FileSystem('EditorStorage');
+
 // Initialize the pages
 if (!isMobileDevice()) {
   pages.switchTo('home-container');
@@ -33,4 +37,4 @@ if (!isMobileDevice()) {
 }
 
 // Run the scripts
-pageScripts();
+pageScripts({ pages, ui, fs });
