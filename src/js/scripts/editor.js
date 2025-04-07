@@ -411,7 +411,7 @@ module.exports = function script({ pages, ui, fs }) {
         ? currentFileName
         : 'new_script.js';
 
-    const fileName = prompt('Enter filename to save in IDE:', suggestedName);
+    let fileName = prompt('Enter filename to save in IDE:', suggestedName);
 
     if (!fileName) {
       return; // User cancelled
@@ -420,6 +420,10 @@ module.exports = function script({ pages, ui, fs }) {
     if (!fileName.trim()) {
       ui.alert('Filename cannot be empty.', 'warning');
       return;
+    }
+
+    if (!fileName.endsWith('.js')) {
+      fileName += '.js'; // Ensure .js extension
     }
 
     try {
