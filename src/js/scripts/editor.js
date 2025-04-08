@@ -6,6 +6,7 @@
 const SUPPORTED_TRIDECCO_VERSIONS = ['0.2.2', '0.2.1', '0.2.0', '0.1.1']; // Newest first
 
 const Editor = require('../editor');
+const URLDataTranscoder = require('../url');
 
 const MIN_PANEL_WIDTH = 100;
 const MIN_PANEL_HEIGHT = 50;
@@ -15,9 +16,14 @@ const TRIDECCO_BOARD_READY_DELAY = 1500;
 const TRIDECCO_BOARD_FAILED_DELAY = 5000;
 const SAVE_UNSUPPORTED_DELAY = 4000;
 const DROPDOWN_HIDE_DELAY = 200;
+const SHARE_GENERATE_INFO_DELAY = 1500;
+const SHARE_GENERATE_CLIPBOARD_DELAY = 3000;
+const SHARE_GENERATE_MANUAL_DELAY = 4000;
+
 const SELECTED_FILE_KEY = 'editorOpenFileId'; // Key for localStorage communication
 const LATEST_TRIDECCO_VERSION = SUPPORTED_TRIDECCO_VERSIONS[0];
 const TRIDECCO_SCRIPT_ID = 'tridecco-board-script'; // ID for the script tag
+const SHARE_PARAM_NAME = 'data';
 
 module.exports = function script({ pages, ui, fs }) {
   const CanvasContainer = document.getElementById('editor-canvas-container'); // For editor usage
@@ -456,7 +462,6 @@ module.exports = function script({ pages, ui, fs }) {
       console.error('Initial version load failed during reset:', err);
       // UI already alerted, selector should be reset by error handler in loadTrideccoVersion
     });
-    if (trideccoVersionSelector) trideccoVersionSelector.value = versionToLoad; // Set UI immediately
 
     updateSaveStatus(); // Update status after setting everything
     if (fileInputComputer) {
@@ -759,6 +764,64 @@ module.exports = function script({ pages, ui, fs }) {
     }
   }
 
+  async function handleShare() {
+    ui.alert('Generating share URL...', 'info', SHARE_GENERATE_INFO_DELAY);
+
+    const content = editor.getContent();
+    const version =
+      trideccoVersionSelector.value ||
+      currentBoardVersion ||
+      LATEST_TRIDECCO_VERSION;
+
+    const dataToEncode = { content, version };
+
+    try {
+      const encodedData = URLDataTranscoder.compile(dataToEncode);
+
+      if (!encodedData) {
+        throw new Error('Encoding resulted in null data.');
+      }
+
+      // Use encodeURIComponent on the compressed string
+      const encodedParam = encodeURIComponent(encodedData);
+      const baseUrl = window.location.origin + window.location.pathname;
+      const shareUrl = `${baseUrl}?${SHARE_PARAM_NAME}=${encodedParam}`;
+
+      // Attempt to copy to clipboard
+      if (navigator.clipboard && window.isSecureContext) {
+        // Check for secure context
+        await navigator.clipboard.writeText(shareUrl);
+        ui.alert(
+          'Share URL copied to clipboard!',
+          'success',
+          SHARE_GENERATE_CLIPBOARD_DELAY,
+        );
+      } else {
+        // Fallback for insecure contexts or older browsers
+        console.warn(
+          'Clipboard API not available or context insecure. Showing prompt instead.',
+        );
+        prompt('Copy this shareable URL:', shareUrl);
+        ui.alert(
+          'URL generated. Please copy it manually.',
+          'info',
+          SHARE_GENERATE_MANUAL_DELAY,
+        );
+      }
+
+      console.log(
+        'Share URL:',
+        '<a href="' + shareUrl + '">' + shareUrl + '</a>',
+      );
+    } catch (error) {
+      console.error('Error generating share URL:', error);
+      ui.alert(
+        'Failed to generate share URL. See console for details.',
+        'error',
+      );
+    }
+  }
+
   // Autosave Functionality
 
   function triggerAutosave() {
@@ -895,8 +958,7 @@ module.exports = function script({ pages, ui, fs }) {
         handleSaveToComputer();
         break;
       case 'share':
-        ui.alert('Share functionality not yet implemented.', 'info');
-        console.log('Share clicked');
+        handleShare();
         break;
       case 'exit':
         console.log('Exit clicked');
@@ -922,19 +984,80 @@ module.exports = function script({ pages, ui, fs }) {
   // Function to run when the editor page is shown
   function editorPageOnOpen() {
     console.log('Editor page opening...');
-    const fileIdToOpen = localStorage.getItem(SELECTED_FILE_KEY);
-    if (fileIdToOpen) {
-      console.log(`Found file ID to open from localStorage: ${fileIdToOpen}`);
-      // Attempt to load the file; this function handles version loading
-      // and removes the key from localStorage internally
-      loadSpecificIdeFile(fileIdToOpen);
-    } else {
-      console.log(
-        'No specific file ID requested, starting with a new empty file.',
-      );
-      // Start with a clean state and the latest board version
-      // This also removes the key from localStorage internally just in case
-      resetEditorState();
+
+    let loadedFromUrl = false;
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedDataEncoded = urlParams.get(SHARE_PARAM_NAME);
+
+    if (sharedDataEncoded) {
+      console.log('Found shared data in URL parameter.');
+      try {
+        // Decode the URL component first, then decompile
+        const decompressedDataString = decodeURIComponent(sharedDataEncoded);
+        const decodedData = URLDataTranscoder.decompile(decompressedDataString);
+
+        if (
+          decodedData &&
+          typeof decodedData.content === 'string' &&
+          typeof decodedData.version === 'string'
+        ) {
+          console.log('Successfully decompiled shared data:', decodedData);
+          // Reset editor state using shared data
+          resetEditorState(
+            'Shared File',
+            decodedData.content,
+            decodedData.version,
+          ); // Pass flag
+          ui.alert('Loaded shared file content.', 'success');
+          loadedFromUrl = true;
+
+          // Clean the URL parameter after successful load
+          try {
+            const cleanUrl =
+              window.location.origin +
+              window.location.pathname +
+              window.location.hash;
+            history.replaceState(null, '', cleanUrl);
+            console.log('Cleaned share data from URL.');
+          } catch (e) {
+            console.warn('Could not clean URL history state:', e);
+          }
+        } else {
+          throw new Error('Decompiled data format is invalid.');
+        }
+      } catch (error) {
+        console.error('Failed to load shared data from URL:', error);
+        ui.alert(
+          'Failed to load shared data from URL. It might be corrupted.',
+          'error',
+        );
+        // Clean the URL parameter even if loading failed to prevent retry loops
+        try {
+          const cleanUrl =
+            window.location.origin +
+            window.location.pathname +
+            window.location.hash;
+          history.replaceState(null, '', cleanUrl);
+        } catch (e) {
+          console.warn('Could not clean URL history state:', e);
+        }
+      }
+    }
+
+    // If NOT loaded from URL, check localStorage
+    if (!loadedFromUrl) {
+      const fileIdToOpen = localStorage.getItem(SELECTED_FILE_KEY);
+      if (fileIdToOpen) {
+        console.log(`Found file ID to open from localStorage: ${fileIdToOpen}`);
+        // This function handles version loading and removes the key
+        loadSpecificIdeFile(fileIdToOpen);
+      } else {
+        console.log(
+          'No specific file ID or shared URL data, starting new file.',
+        );
+        // This loads the latest version and runs code
+        resetEditorState();
+      }
     }
   }
 
