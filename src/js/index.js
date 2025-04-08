@@ -29,11 +29,22 @@ const ui = new UI();
 const fs = new FileSystem('EditorStorage');
 
 // Initialize the pages
-if (!isMobileDevice()) {
-  pages.switchTo('home-container');
-} else {
+if (isMobileDevice()) {
   // If it's a mobile device, show the not-supported page
   pages.switchTo('not-supported-container');
+} else {
+  // Check if there is shared data in the URL
+  const SHARE_PARAM_NAME = 'data';
+  const LOAD_DELAY = 500;
+  const urlParams = new URLSearchParams(window.location.search);
+  const sharedDataEncoded = urlParams.get(SHARE_PARAM_NAME);
+  if (sharedDataEncoded) {
+    setTimeout(() => {
+      pages.switchTo('editor-container');
+    }, LOAD_DELAY);
+  } else {
+    pages.switchTo('home-container');
+  }
 }
 
 // Run the scripts
