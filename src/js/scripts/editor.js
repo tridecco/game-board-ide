@@ -10,19 +10,23 @@ const Editor = require('../editor');
 const MIN_PANEL_WIDTH = 100;
 const MIN_PANEL_HEIGHT = 50;
 const AUTOSAVE_DELAY = 2000;
+const TRIDECCO_BOARD_LODING_DELAY = 2000;
+const TRIDECCO_BOARD_READY_DELAY = 1500;
+const TRIDECCO_BOARD_FAILED_DELAY = 5000;
+const SAVE_UNSUPPORTED_DELAY = 4000;
 const DROPDOWN_HIDE_DELAY = 200;
 const SELECTED_FILE_KEY = 'editorOpenFileId'; // Key for localStorage communication
 const LATEST_TRIDECCO_VERSION = SUPPORTED_TRIDECCO_VERSIONS[0];
 const TRIDECCO_SCRIPT_ID = 'tridecco-board-script'; // ID for the script tag
 
 module.exports = function script({ pages, ui, fs }) {
+  const CanvasContainer = document.getElementById('editor-canvas-container'); // For editor usage
+
   const verticalResizer = document.getElementById('editor-vertical-resizer');
   const horizontalResizer = document.getElementById(
     'editor-horizontal-resizer',
   );
   const leftPanel = document.getElementById('editor-left-panel');
-  const canvasPanel = document.getElementById('editor-canvas-panel'); // Renamed from editor-top-section
-  const consolePanel = document.getElementById('editor-console-panel'); // Renamed from editor-bottom-section
   const toolbar = document.getElementById('editor-toolbar');
   const saveStatusText = document.getElementById('editor-save-status-text');
   const fileInputComputer = document.getElementById('file-input-computer');
@@ -33,8 +37,8 @@ module.exports = function script({ pages, ui, fs }) {
   const trideccoVersionSelector = document.getElementById(
     'tridecco-board-version-selector',
   );
-  const canvasContainer = document.getElementById('editor-canvas-container'); // New: Canvas parent
-  const consoleOutput = document.getElementById('editor-console-output'); // New: Console output div
+  const canvasContainer = document.getElementById('editor-canvas-container');
+  const consoleOutput = document.getElementById('editor-console-output');
 
   let currentFileId = null;
   let currentFileName = 'Untitled';
@@ -95,15 +99,15 @@ module.exports = function script({ pages, ui, fs }) {
     originalConsoleError = console.error;
     // You can override console.warn, console.info etc. similarly
 
-    console.log = function (...args) {
+    console.log = function log(...args) {
       originalConsoleLog.apply(console, args); // Keep original behavior
       appendToConsole(args.map(String).join(' '), 'log'); // Basic joining
     };
 
-    console.error = function (...args) {
+    console.error = function error(...args) {
       originalConsoleError.apply(console, args); // Keep original behavior
       // Format error message slightly better
-      let errorMessage = args
+      const errorMessage = args
         .map((arg) =>
           arg instanceof Error ? arg.stack || arg.message : String(arg),
         )
@@ -111,11 +115,11 @@ module.exports = function script({ pages, ui, fs }) {
       appendToConsole(errorMessage, 'error');
     };
 
-    console.warn = function (...args) {
+    console.warn = function warn(...args) {
       appendToConsole(args.map(String).join(' '), 'warn');
     };
 
-    console.info = function (...args) {
+    console.info = function info(...args) {
       appendToConsole(args.map(String).join(' '), 'info');
     };
   }
@@ -202,7 +206,11 @@ module.exports = function script({ pages, ui, fs }) {
       console.log(`Attempting to load Tridecco Board version: ${version}`);
       isBoardLoading = true;
       trideccoVersionSelector.disabled = true;
-      ui.alert(`Loading Tridecco Board v${version}...`, 'info', 2000);
+      ui.alert(
+        `Loading Tridecco Board v${version}...`,
+        'info',
+        TRIDECCO_BOARD_LODING_DELAY,
+      );
       cleanupBoardResources(); // Clean up before loading new version
 
       const existingScript = document.getElementById(TRIDECCO_SCRIPT_ID);
@@ -219,7 +227,11 @@ module.exports = function script({ pages, ui, fs }) {
         trideccoVersionSelector.value = version;
         isBoardLoading = false;
         trideccoVersionSelector.disabled = false;
-        ui.alert(`Tridecco Board v${version} ready.`, 'success', 1500);
+        ui.alert(
+          `Tridecco Board v${version} ready.`,
+          'success',
+          TRIDECCO_BOARD_READY_DELAY,
+        );
 
         await initializeAndRunBoard();
 
@@ -234,7 +246,11 @@ module.exports = function script({ pages, ui, fs }) {
           trideccoVersionSelector.value = currentBoardVersion; // Revert selection
         }
 
-        ui.alert(`Failed to load Tridecco v${version}.`, 'error', 5000);
+        ui.alert(
+          `Failed to load Tridecco v${version}.`,
+          'error',
+          TRIDECCO_BOARD_FAILED_DELAY,
+        );
         reject(new Error(`Failed to load script for version ${version}`));
       };
 
@@ -242,7 +258,6 @@ module.exports = function script({ pages, ui, fs }) {
     });
   }
 
-  /** Handles selection change in the version dropdown. */
   async function handleVersionChange() {
     if (!trideccoVersionSelector || isBoardLoading) return;
 
@@ -363,8 +378,9 @@ module.exports = function script({ pages, ui, fs }) {
     const canvasPanel = document.getElementById('editor-canvas-panel');
     const consolePanel = document.getElementById('editor-console-panel');
     if (canvasPanel) canvasPanel.style.height = `${newHeight}px`;
-    if (consolePanel)
+    if (consolePanel) {
       consolePanel.style.height = `calc(100% - ${newHeight}px - ${resizerHeight}px)`;
+    }
   }
 
   function stopResizeHorizontal() {
@@ -372,7 +388,7 @@ module.exports = function script({ pages, ui, fs }) {
     document.removeEventListener('mouseup', stopResizeHorizontal);
   }
 
-  // --- State Management & Status Updates ---
+  // State Management & Status Updates
 
   function updateSaveStatus(status = null) {
     clearTimeout(autosaveTimeoutId);
@@ -478,14 +494,13 @@ module.exports = function script({ pages, ui, fs }) {
         ui.alert(
           `File saved with unsupported version (${fileData.boardVersion}). Loading latest.`,
           'warning',
-          4000,
+          SAVE_UNSUPPORTED_DELAY,
         );
         // versionToLoad remains LATEST_TRIDECCO_VERSION
       } else {
         console.log(
           `File ${fileId} does not specify a board version. Loading latest (${LATEST_TRIDECCO_VERSION}).`,
         );
-        // versionToLoad remains LATEST_TRIDECCO_VERSION
       }
       // Set UI immediately, loadTrideccoVersion handles async load and run
       trideccoVersionSelector.value = versionToLoad;
@@ -715,9 +730,6 @@ module.exports = function script({ pages, ui, fs }) {
     try {
       updateSaveStatus(`Saving "${fileName}" to IDE...`);
 
-      // Use fs.createFile for "Save As" behavior (or initial save)
-      // If currentFileId exists and filename matches, could use fs.updateFile instead,
-      // but createFile handles overwriting based on name, simplifying for now.
       const newFileId = fs.createFile(
         fileName,
         content,
@@ -730,8 +742,9 @@ module.exports = function script({ pages, ui, fs }) {
       currentBoardVersion = versionToSave; // Reflect the saved version state
       isDirty = false; // Now it's saved
       updateSaveStatus(); // Update status to "Saved" (will include version)
-      if (trideccoVersionSelector)
+      if (trideccoVersionSelector) {
         trideccoVersionSelector.value = versionToSave; // Ensure UI matches saved state
+      }
 
       ui.alert(
         `File "${fileName}" (Board v${versionToSave}) saved to IDE.`,
@@ -744,7 +757,7 @@ module.exports = function script({ pages, ui, fs }) {
     }
   }
 
-  // --- Autosave Functionality ---
+  // Autosave Functionality
 
   function triggerAutosave() {
     // Only autosave if loaded from IDE, dirty, and board library isn't currently loading
@@ -796,13 +809,13 @@ module.exports = function script({ pages, ui, fs }) {
       );
     } catch (error) {
       console.error('Autosave failed:', error);
-      updateSaveStatus(`Autosave failed!`);
+      updateSaveStatus('Autosave failed!');
       ui.alert(`Autosave failed: ${error.message}`, 'error');
     }
     autosaveTimeoutId = null;
   }
 
-  // --- Event Listeners ---
+  // Event Listeners
 
   editor.onContentChange(() => {
     if (!isDirty) {
@@ -819,7 +832,7 @@ module.exports = function script({ pages, ui, fs }) {
 
   // Add Run action to toolbar listener
   toolbar.addEventListener('click', (e) => {
-    let target = e.target;
+    const target = e.target;
     const actionButton = target.closest('button[data-action]');
     if (!actionButton) return;
     const action = actionButton.dataset.action;
@@ -839,19 +852,19 @@ module.exports = function script({ pages, ui, fs }) {
       let confirmationMessage =
         'You have unsaved changes. Are you sure you want to continue?';
       // Customize messages for clarity
-      if (action === 'exit')
+      if (action === 'exit') {
         confirmationMessage =
           'You have unsaved changes that might not be autosaved. Are you sure you want to exit?';
-      else if (action === 'new-template')
+      } else if (action === 'new-template') {
         confirmationMessage =
           'You have unsaved changes. Are you sure you want to create a new file from a template?';
-      else if (action === 'new-empty')
+      } else if (action === 'new-empty') {
         confirmationMessage =
           'You have unsaved changes. Are you sure you want to create a new empty file?';
-      else if (action.startsWith('load-'))
+      } else if (action.startsWith('load-')) {
         confirmationMessage =
           'You have unsaved changes. Are you sure you want to load a different file?';
-
+      }
       if (!confirm(confirmationMessage)) {
         return; // Stop the action if user cancels
       }
@@ -902,7 +915,7 @@ module.exports = function script({ pages, ui, fs }) {
     }
   });
 
-  // --- Initialization and Page Lifecycle ---
+  // Initialization and Page Lifecycle
 
   // Function to run when the editor page is shown
   function editorPageOnOpen() {
@@ -921,7 +934,6 @@ module.exports = function script({ pages, ui, fs }) {
       // This also removes the key from localStorage internally just in case
       resetEditorState();
     }
-    ui.alert('Editor ready.', 'info', 1500); // General ready message
   }
 
   // Initial setup calls
@@ -931,4 +943,4 @@ module.exports = function script({ pages, ui, fs }) {
 
   // Register the function to run when this page container becomes visible
   pages.onShow('editor-container', editorPageOnOpen);
-}; // End of module export
+};

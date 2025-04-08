@@ -10,7 +10,7 @@ const ALERT_LONG_DURATION = 5000;
 const ALERT_DELAY = 100;
 const TIMESTAMP_SLICE_LENGTH = 19;
 
-module.exports = function filesScript({ pages, ui, fs }) {
+module.exports = function script({ pages, ui, fs }) {
   const container = document.getElementById('files-container');
   const tableBody = document.getElementById('files-table-body');
   const emptyMessage = document.getElementById('files-empty-message');
