@@ -3,6 +3,8 @@
  * @description This module handles the editor functionalities for the application.
  */
 
+const monaco = require('monaco-editor');
+
 const DEFAULT_EDITOR_OPTIONS = {
   language: 'javascript',
   theme: 'vs-dark',
@@ -26,20 +28,7 @@ class Editor {
     this.options = { ...DEFAULT_EDITOR_OPTIONS, ...options };
     this.editorInstance = null;
     this.contentChangeCallbacks = [];
-    this._initMonaco();
-  }
-
-  /**
-   * @method _initMonaco - Initializes the Monaco Editor.
-   */
-  _initMonaco() {
-    if (window.__monaco_ready__) {
-      this._createEditor();
-    } else {
-      window.addEventListener('monaco-ready', () => this._createEditor(), {
-        once: true,
-      });
-    }
+    this._createEditor();
   }
 
   /**
