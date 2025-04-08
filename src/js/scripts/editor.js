@@ -141,9 +141,11 @@ module.exports = function script({ pages, ui, fs }) {
 
   function runCurrentCode() {
     if (typeof window.Tridecco === 'undefined' || !window.Tridecco) {
-      console.error('Tridecco library is not available. Cannot run code.');
+      console.error(
+        'Tridecco Board library is not available. Cannot run code.',
+      );
       ui.alert(
-        'Tridecco library not loaded. Try selecting a version or reloading.',
+        'Tridecco Board library not loaded. Try selecting a version or reloading.',
         'error',
       );
       return;
@@ -247,7 +249,7 @@ module.exports = function script({ pages, ui, fs }) {
         }
 
         ui.alert(
-          `Failed to load Tridecco v${version}.`,
+          `Failed to load Tridecco Board v${version}.`,
           'error',
           TRIDECCO_BOARD_FAILED_DELAY,
         );
