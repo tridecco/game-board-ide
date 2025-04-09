@@ -8,32 +8,40 @@
  */
 class URLDataTranscoder {
   /**
-   * @method compile - Compresses and encodes the data into a URL-friendly format.
+   * @method compile - Encodes the data into a URL-friendly string.
    * @param {Object} data - The data to be encoded.
-   * @returns {string} - The encoded data.
+   * @returns {string|null} - The URL-safe encoded data string, or null on error.
    */
   static compile(data) {
     try {
       const jsonString = JSON.stringify(data); // Convert object to JSON string
-      return jsonString;
+      const base64String = btoa(jsonString); // Convert JSON string to Base64
+      const encodedString = encodeURIComponent(base64String); // URL-encode the Base64 string
+      return encodedString;
     } catch (error) {
       console.error('Error compiling data:', error);
-      return null; // Or throw an error, handle errors according to your needs
+      return null;
     }
   }
 
   /**
-   * @method decompile - Decompresses and decodes the data from a URL-friendly format.
-   * @param {string} jsonString - The JSON encoded data.
-   * @returns {Object} - The original data object.
+   * @method decompile - Decodes the data from a URL-friendly string.
+   * @param {string} encodedString - The URL-safe encoded data string.
+   * @returns {Object|null} - The original data object, or null on error.
    */
-  static decompile(jsonString) {
+  static decompile(encodedString) {
+    if (typeof encodedString !== 'string' || encodedString.length === 0) {
+      console.error('Error decompiling data: Input is not a valid string.');
+      return null;
+    }
     try {
+      const base64String = decodeURIComponent(encodedString); // Decode the URL-encoded string
+      const jsonString = atob(base64String); // Convert Base64 string back to JSON string
       const originalData = JSON.parse(jsonString); // Convert JSON string to JavaScript object
       return originalData;
     } catch (error) {
       console.error('Error decompiling data:', error);
-      return null; // Or throw an error, handle errors according to your needs
+      return null;
     }
   }
 }
