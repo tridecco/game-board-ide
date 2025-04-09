@@ -3,7 +3,14 @@
  * @description Handles editor UI, file ops, autosave, library version management, and code execution.
  */
 
-const SUPPORTED_TRIDECCO_VERSIONS = ['0.2.2', '0.2.1', '0.2.0', '0.1.1']; // Newest first
+const SUPPORTED_TRIDECCO_VERSIONS = [
+  '0.3.0',
+  '0.2.3',
+  '0.2.2',
+  '0.2.1',
+  '0.2.0',
+  '0.1.1',
+]; // Newest first
 
 const Editor = require('../editor');
 const URLDataTranscoder = require('../url');
