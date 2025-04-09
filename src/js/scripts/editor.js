@@ -25,6 +25,15 @@ const LATEST_TRIDECCO_VERSION = SUPPORTED_TRIDECCO_VERSIONS[0];
 const TRIDECCO_SCRIPT_ID = 'tridecco-board-script'; // ID for the script tag
 const SHARE_PARAM_NAME = 'data';
 
+const DEFAULT_EDITOR_CONTENT = `/*
+ *******************************************************************************************
+ * Import the Tridecco Board library using new Tridecco.<className> to initialize.         *
+ * More details please go to: https://github.com/tridecco/game-board for more information. *
+ *                                                                                         *
+ * Please use 'CanvasContainer' to initialize Tridecco Board Renderer.                     *
+ *******************************************************************************************
+*/`;
+
 module.exports = function script({ pages, ui, fs }) {
   const CanvasContainer = document.getElementById('editor-canvas-container'); // For editor usage
 
@@ -103,7 +112,6 @@ module.exports = function script({ pages, ui, fs }) {
 
     originalConsoleLog = console.log;
     originalConsoleError = console.error;
-    // You can override console.warn, console.info etc. similarly
 
     console.log = function log(...args) {
       originalConsoleLog.apply(console, args); // Keep original behavior
@@ -437,7 +445,7 @@ module.exports = function script({ pages, ui, fs }) {
   // Modified resetEditorState to handle board version
   function resetEditorState(
     fileName = 'Untitled',
-    content = '',
+    content = DEFAULT_EDITOR_CONTENT,
     boardVersion = LATEST_TRIDECCO_VERSION,
   ) {
     // Clear the open file request key immediately
